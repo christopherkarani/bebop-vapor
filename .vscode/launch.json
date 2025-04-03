@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:bebop-vapor}",
+            "name": "Debug bebop-vapor",
+            "program": "${workspaceFolder:bebop-vapor}/.build/debug/bebop-vapor",
+            "preLaunchTask": "swift: Build Debug bebop-vapor"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:bebop-vapor}",
+            "name": "Release bebop-vapor",
+            "program": "${workspaceFolder:bebop-vapor}/.build/release/bebop-vapor",
+            "preLaunchTask": "swift: Build Release bebop-vapor"
+        }
+    ]
+}
