@@ -90,6 +90,7 @@ actor StellarNotificationService {
     private var processedTransactions: Set<String> = []
     private let maxProcessedTransactionsCount: Int = 1000
     private var usePolling: Bool = false
+    private var deviceTokenCache: [String: String] = [:]
     
     init(app: Application) {
         self.app = app
@@ -108,6 +109,38 @@ actor StellarNotificationService {
         self.httpClient = HTTPClient(eventLoopGroupProvider: .shared(app.eventLoopGroup), configuration: clientConfig)
         
         self.eventLoop = app.eventLoopGroup.next()
+    }
+
+    // Cache a device token in memory for fast lookups
+    func cacheDeviceToken(_ token: String, for account: String) {
+        deviceTokenCache[account] = token
+    }
+
+    // Remove a cached token and delete the registration from the database
+    func removeDeviceToken(for account: String) async throws {
+        deviceTokenCache.removeValue(forKey: account)
+
+        if let registration = try await DeviceTokenRegistration.query(on: app.db)
+            .filter(\.$stellarAccount == account)
+            .first() {
+            try await registration.delete(on: app.db)
+        }
+    }
+
+    // Retrieve a device token from cache or fallback to the database
+    func getDeviceToken(for account: String) async throws -> String? {
+        if let cached = deviceTokenCache[account] {
+            return cached
+        }
+
+        if let registration = try await DeviceTokenRegistration.query(on: app.db)
+            .filter(\.$stellarAccount == account)
+            .first() {
+            deviceTokenCache[account] = registration.deviceToken
+            return registration.deviceToken
+        }
+
+        return nil
     }
     
     func startMonitoring(account: String) async throws {
@@ -735,27 +768,21 @@ actor StellarNotificationService {
         // Use cached registration if we have one to avoid DB lookup
         // This is a critical optimization for immediate notifications
         do {
-            // First attempt to find registration quickly from a cache
             let dbLookupStartTime = Date().timeIntervalSince1970
-            let registration = try? await DeviceTokenRegistration.query(on: app.db)
-                .filter(\.$stellarAccount == currentAccount)
-                .first()
-            
-            let dbLookupTime = Date().timeIntervalSince1970 - dbLookupStartTime
-            app.logger.error("⏱️ NOTIFICATION: Device token lookup took \(dbLookupTime) seconds")
-            
-            guard let registration = registration else {
+            guard let deviceToken = try await getDeviceToken(for: currentAccount) else {
                 app.logger.error("❌ NOTIFICATION: No device token found for account \(currentAccount)")
                 return
             }
-            
+            let dbLookupTime = Date().timeIntervalSince1970 - dbLookupStartTime
+            app.logger.error("⏱️ NOTIFICATION: Device token lookup took \(dbLookupTime) seconds")
+
             app.logger.error("✅ NOTIFICATION: Found device token, sending notification")
-            
+
             // Send notification - measure exact time spent in APNs
             let notifSendStartTime = Date().timeIntervalSince1970
-            
-                try await NotificationBroadcaster.shared.broadcastNotification(
-                    to: registration.deviceToken,
+
+            try await NotificationBroadcaster.shared.broadcastNotification(
+                to: deviceToken,
                 title: "Payment Received",
                 body: notificationBody,
                 payload: payload
@@ -773,10 +800,13 @@ actor StellarNotificationService {
             let errorString = error.localizedDescription
             if errorString.contains("BadDeviceToken") {
                 app.logger.error("❌ NOTIFICATION: Invalid device token - token may be expired")
+                try? await removeDeviceToken(for: currentAccount)
             } else if errorString.contains("DeviceTokenNotForTopic") {
                 app.logger.error("❌ NOTIFICATION: Token doesn't match app bundle ID")
+                try? await removeDeviceToken(for: currentAccount)
             } else if errorString.contains("Unregistered") {
                 app.logger.error("❌ NOTIFICATION: Device has unregistered from notifications")
+                try? await removeDeviceToken(for: currentAccount)
             } else {
                 app.logger.error("❌ NOTIFICATION: Other APNS error: \(errorString)")
             }
