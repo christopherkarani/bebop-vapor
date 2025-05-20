@@ -56,6 +56,10 @@ struct NotificationController: RouteCollection {
                 )
                 try await registration.save(on: req.db)
             }
+
+            // Update in-memory cache for faster lookups
+            await StellarNotificationService.shared(app: req.application)
+                .cacheDeviceToken(request.deviceToken, for: request.stellarAccount)
             
             // Start monitoring the Stellar account
             do {
