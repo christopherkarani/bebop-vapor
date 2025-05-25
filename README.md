@@ -19,10 +19,23 @@ To execute tests, use the following command:
 swift test
 ```
 
+## Deployment
+
+The project ships with a `Dockerfile` and a `docker-compose.yml` for running
+the application inside a container. Build the Docker image and start the app
+service with the following commands:
+
+```bash
+docker compose build
+docker compose up app
+```
+
+The application will be available on port `8080` by default.
+
 ### See more
 
 - [Vapor Website](https://vapor.codes)
 - [Vapor Documentation](https://docs.vapor.codes)
 - [Vapor GitHub](https://github.com/vapor)
 - [Vapor Community](https://github.com/vapor-community)
-# bebop-vapor
+
