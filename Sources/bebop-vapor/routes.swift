@@ -10,5 +10,6 @@ func routes(_ app: Application) throws {
         "Hello, world!"
     }
 
-   // try app.register(collection: TodoController())
+    // Register API route collections
+    try app.register(collection: NotificationController())
 }
