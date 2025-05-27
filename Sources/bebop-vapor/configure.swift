@@ -17,6 +17,15 @@ public func configure(_ app: Application) async throws {
         tls: .prefer(try .init(configuration: .clientDefault)))
     ), as: .psql)
 
+    // Register database migrations for new models
+    app.migrations.add(CreateCursorRecord())
+    app.migrations.add(CreateProcessedTransactionRecord())
+    app.migrations.add(CreateDeviceTokenRegistration())
+    app.migrations.add(CreateNotification())
+
+    // Initialize services used across the application
+    await NotificationBroadcaster.shared.initialize(app: app)
+
 
 
     // register routes
